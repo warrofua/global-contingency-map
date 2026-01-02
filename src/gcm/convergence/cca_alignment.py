@@ -225,6 +225,26 @@ class MultiViewAlignment:
 
         return Z1, Z2, Z3
 
+    def fit_transform_three_view(
+        self,
+        X1: np.ndarray,
+        X2: np.ndarray,
+        X3: np.ndarray,
+        view_names: Tuple[str, str, str] = ("financial", "narrative", "social")
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Fit and transform three views in one step
+
+        Args:
+            X1, X2, X3: Feature matrices
+            view_names: View names
+
+        Returns:
+            (Z1, Z2, Z3) latent representations
+        """
+        self.fit_three_view(X1, X2, X3, view_names)
+        return self.transform_three_view(X1, X2, X3, view_names)
+
     def get_canonical_correlations(
         self,
         view1_name: str,
