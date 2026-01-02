@@ -88,14 +88,19 @@ def main():
 
     social_extractor = SocialGraphFeatures()
 
-    # Create mock graph for each day
+    # Create mock graph for each day with time-varying parameters
     social_snapshots = []
-    for date in dates:
+    for i, date in enumerate(dates):
+        # Vary network parameters over time to simulate evolution
+        p_within = 0.25 + 0.1 * np.sin(i / 5)  # Oscillate between 0.15 and 0.35
+        p_between = 0.03 + 0.04 * (i / len(dates))  # Gradual increase 0.03 to 0.07
+
         G = social_extractor.create_mock_graph(
             n_nodes=100,
             n_communities=5,
-            p_within=0.3,
-            p_between=0.05
+            p_within=p_within,
+            p_between=p_between,
+            seed=1000 + i  # Different seed for each snapshot
         )
         social_snapshots.append((date, G))
 

@@ -68,7 +68,8 @@ class SocialGraphFeatures:
         n_nodes: int = 100,
         n_communities: int = 5,
         p_within: float = 0.3,
-        p_between: float = 0.05
+        p_between: float = 0.05,
+        seed: Optional[int] = None
     ) -> nx.Graph:
         """
         Create mock social graph with community structure
@@ -78,6 +79,7 @@ class SocialGraphFeatures:
             n_communities: Number of communities
             p_within: Edge probability within community
             p_between: Edge probability between communities
+            seed: Random seed (None for random)
 
         Returns:
             NetworkX graph with communities
@@ -88,7 +90,7 @@ class SocialGraphFeatures:
                  for j in range(n_communities)]
                 for i in range(n_communities)]
 
-        G = nx.stochastic_block_model(sizes, probs, seed=42)
+        G = nx.stochastic_block_model(sizes, probs, seed=seed)
 
         logger.info(f"Created mock graph with {G.number_of_nodes()} nodes in {n_communities} communities")
 
