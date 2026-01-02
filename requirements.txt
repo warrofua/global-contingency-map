@@ -10,12 +10,12 @@ statsmodels>=0.14.0
 
 # Financial data and options
 yfinance>=0.2.28
-QuantLib-Python>=1.31
+# QuantLib-Python>=1.31  # Optional - install separately if needed for advanced options pricing
 
-# NLP and embeddings
+# NLP and embeddings (install torch separately for your platform if needed)
 sentence-transformers>=2.2.0
-transformers>=4.30.0
-torch>=2.0.0
+# transformers>=4.30.0  # Included with sentence-transformers
+# torch>=2.0.0  # Included with sentence-transformers
 
 # Network analysis
 networkx>=3.1
@@ -28,11 +28,11 @@ seaborn>=0.12.0
 
 # Web and API
 requests>=2.31.0
-fastapi>=0.100.0
-uvicorn>=0.23.0
+# fastapi>=0.100.0  # Optional - for web deployment
+# uvicorn>=0.23.0  # Optional - for web deployment
 
 # Database
-supabase>=1.0.0
+# supabase>=1.0.0  # Optional - for cloud storage
 
 # Utilities
 python-dotenv>=1.0.0

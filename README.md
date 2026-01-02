@@ -51,17 +51,36 @@ Outputs (Regime Probabilities, CSAI, PSI, Alerts)
 
 ### Install Dependencies
 
+There are three installation options:
+
+**Option 1: Minimal Install (Recommended for getting started)**
 ```bash
 # Clone repository
 git clone <repository-url>
 cd global-contingency-map
 
-# Install package
-pip install -e .
-
-# Or install dependencies directly
-pip install -r requirements.txt
+# Install minimal dependencies (Phase 1 functionality)
+pip install -r requirements-minimal.txt
 ```
+
+**Option 2: Full Install**
+```bash
+# Install all dependencies (all phases)
+pip install -r requirements.txt
+
+# Optional: Add narrative analysis capabilities
+pip install -r requirements-optional.txt
+```
+
+**Option 3: Editable Development Install**
+```bash
+# Install package in development mode
+pip install -e .
+```
+
+**Note**: Some dependencies like PyTorch and QuantLib are optional:
+- PyTorch will be installed automatically with sentence-transformers if needed
+- QuantLib-Python is commented out due to installation complexity (not required for core functionality)
 
 ### Configuration
 
