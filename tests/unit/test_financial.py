@@ -28,7 +28,7 @@ class TestSPDExtractor:
 
         # Gaussian SPD
         spd = np.exp(-(strikes - spot)**2 / (2 * 20**2))
-        spd = spd / np.trapz(spd, strikes)
+        spd = spd / np.trapezoid(spd, strikes)
 
         moments = extractor.compute_spd_moments(strikes, spd, spot)
 

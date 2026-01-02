@@ -89,8 +89,8 @@ class SPDExtractor:
         puts = opt_chain.puts
 
         # Clean data: remove rows with zero volume or bid/ask
-        calls = calls[(calls['volume'] > 0) & (calls['bid'] > 0) & (calls['ask'] > 0)]
-        puts = puts[(puts['volume'] > 0) & (puts['bid'] > 0) & (puts['ask'] > 0)]
+        calls = calls[(calls['volume'] > 0) & (calls['bid'] > 0) & (calls['ask'] > 0)].copy()
+        puts = puts[(puts['volume'] > 0) & (puts['bid'] > 0) & (puts['ask'] > 0)].copy()
 
         # Calculate mid prices
         calls['mid_price'] = (calls['bid'] + calls['ask']) / 2
@@ -158,7 +158,7 @@ class SPDExtractor:
         spd = np.maximum(spd, 0)
 
         # Normalize to integrate to 1 (probability density)
-        spd_integral = np.trapz(spd, strike_grid)
+        spd_integral = np.trapezoid(spd, strike_grid)
         if spd_integral > 0:
             spd = spd / spd_integral
 
@@ -195,28 +195,28 @@ class SPDExtractor:
             }
 
         # Mean (expected value under RND)
-        mean = np.trapz(strikes * spd, strikes)
+        mean = np.trapezoid(strikes * spd, strikes)
 
         # Variance
-        variance = np.trapz((strikes - mean)**2 * spd, strikes)
+        variance = np.trapezoid((strikes - mean)**2 * spd, strikes)
         std = np.sqrt(variance)
 
         # Skewness
-        skewness = np.trapz((strikes - mean)**3 * spd, strikes) / (std**3) if std > 0 else 0
+        skewness = np.trapezoid((strikes - mean)**3 * spd, strikes) / (std**3) if std > 0 else 0
 
         # Excess kurtosis
-        kurtosis = np.trapz((strikes - mean)**4 * spd, strikes) / (std**4) - 3 if std > 0 else 0
+        kurtosis = np.trapezoid((strikes - mean)**4 * spd, strikes) / (std**4) - 3 if std > 0 else 0
 
         # Tail mass beyond ±2σ
         left_threshold = spot_price - 2 * std
         right_threshold = spot_price + 2 * std
 
-        tail_mass_left = np.trapz(
+        tail_mass_left = np.trapezoid(
             spd[strikes < left_threshold],
             strikes[strikes < left_threshold]
         ) if np.any(strikes < left_threshold) else 0
 
-        tail_mass_right = np.trapz(
+        tail_mass_right = np.trapezoid(
             spd[strikes > right_threshold],
             strikes[strikes > right_threshold]
         ) if np.any(strikes > right_threshold) else 0

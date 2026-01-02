@@ -299,7 +299,7 @@ class NarrativeEmbeddingClusters:
         prev_cluster_params = None
 
         for timestamp, group in grouped:
-            if len(group) < 10:  # Need minimum samples
+            if len(group) < 3:  # Need minimum samples for clustering
                 continue
 
             group_embeddings = np.vstack(group['embedding'].values)
@@ -361,6 +361,15 @@ class NarrativeEmbeddingClusters:
 
             # Save for next iteration
             prev_cluster_params = self.cluster_params.copy()
+
+        # Handle case where no valid time windows were found
+        if not features_list:
+            logger.warning("No time windows met minimum sample threshold")
+            # Return empty DataFrame with expected structure
+            return pd.DataFrame(columns=[
+                'timestamp', 'n_narratives', 'avg_cluster_coherence',
+                'avg_cluster_drift', 'avg_inter_cluster_distance', 'topic_entropy'
+            ]).set_index('timestamp')
 
         features_df = pd.DataFrame(features_list)
         features_df.set_index('timestamp', inplace=True)
