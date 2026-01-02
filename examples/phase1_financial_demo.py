@@ -48,9 +48,13 @@ def main():
         print(f"  State probabilities: {result['regime']['state_probabilities']}")
 
         print("\n--- Early Warnings ---")
-        print(f"  AR(1): {result['early_warning']['ar1']:.3f}")
-        print(f"  Variance ratio: {result['early_warning']['variance_ratio']:.3f}")
-        print(f"  Alert level: {result['early_warning']['alert_level']}")
+        ar1 = result['early_warning']['ar1']
+        variance_ratio = result['early_warning']['variance_ratio']
+        alert_level = result['early_warning']['alert_level']
+
+        print(f"  AR(1): {ar1:.3f}" if ar1 is not None else "  AR(1): N/A (insufficient data)")
+        print(f"  Variance ratio: {variance_ratio:.3f}" if variance_ratio is not None else "  Variance ratio: N/A (insufficient data)")
+        print(f"  Alert level: {alert_level}")
 
         # Create dashboard
         print("\n--- Generating Dashboard ---")
