@@ -112,8 +112,12 @@ class MultiViewAlignment:
             logger.warning(f"All features are constant in {view1_name} or {view2_name}, cannot fit CCA")
             # Create dummy model that returns zeros
             self.models[(view1_name, view2_name)] = None
-            self.scalers[view1_name] = None
-            self.scalers[view2_name] = None
+            # Don't overwrite scalers if they were already set by a previous successful fit
+            # Just set them to None if they don't exist yet
+            if view1_name not in self.scalers:
+                self.scalers[view1_name] = None
+            if view2_name not in self.scalers:
+                self.scalers[view2_name] = None
             return self
 
         # Standardize
@@ -171,12 +175,12 @@ class MultiViewAlignment:
             raise ValueError(f"Model not fitted for views ({view1_name}, {view2_name})")
 
         model = self.models[key]
-        scaler1 = self.scalers[view1_name]
-        scaler2 = self.scalers[view2_name]
+        scaler1 = self.scalers.get(view1_name)
+        scaler2 = self.scalers.get(view2_name)
 
-        # Handle case where model is None (all constant features)
-        if model is None:
-            logger.warning(f"Model is None for views ({view1_name}, {view2_name}), returning NaN")
+        # Handle case where model is None (all constant features) or scalers are None
+        if model is None or scaler1 is None or scaler2 is None:
+            logger.warning(f"Model or scalers are None for views ({view1_name}, {view2_name}), returning NaN")
             Z1 = np.full((len(X1), self.n_components), np.nan)
             Z2 = np.full((len(X2), self.n_components), np.nan)
             return Z1, Z2
