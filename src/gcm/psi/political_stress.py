@@ -32,6 +32,26 @@ class PoliticalStressIndex:
         """Initialize PSI computer"""
         logger.info("Initialized Political Stress Index computer")
 
+    def _safe_normalize(self, series: pd.Series) -> pd.Series:
+        """
+        Safely normalize a series to [0, 1]
+
+        Args:
+            series: Input series
+
+        Returns:
+            Normalized series
+        """
+        min_val = series.min()
+        max_val = series.max()
+        range_val = max_val - min_val
+
+        if pd.isna(min_val) or pd.isna(max_val) or range_val < 1e-8:
+            # Constant or all NaN - return zeros with same index
+            return pd.Series(0.0, index=series.index)
+
+        return (series - min_val) / (range_val + 1e-8)
+
     def compute_mass_mobilization_potential(
         self,
         financial_features: pd.DataFrame,
@@ -51,21 +71,34 @@ class PoliticalStressIndex:
         Returns:
             MMP time series
         """
+        # Get common index
+        common_idx = financial_features.index.intersection(narrative_features.index)
+
         # Financial component: economic stress
         # High tail mass = market anticipating shocks
-        financial_stress = financial_features.get('tail_mass_total', pd.Series(0))
+        if 'tail_mass_total' in financial_features.columns:
+            financial_stress = financial_features.loc[common_idx, 'tail_mass_total']
+        else:
+            financial_stress = pd.Series(0.0, index=common_idx)
 
         # Normalize to [0, 1]
-        financial_stress_norm = (financial_stress - financial_stress.min()) / (financial_stress.max() - financial_stress.min() + 1e-8)
+        financial_stress_norm = self._safe_normalize(financial_stress)
 
         # Narrative component: grievance prevalence
         # High topic entropy = diverse grievances
         # High drift = rapid narrative shift
-        narrative_stress = narrative_features.get('topic_entropy', pd.Series(0))
-        narrative_drift = narrative_features.get('avg_cluster_drift', pd.Series(0))
+        if 'topic_entropy' in narrative_features.columns:
+            narrative_stress = narrative_features.loc[common_idx, 'topic_entropy']
+        else:
+            narrative_stress = pd.Series(0.0, index=common_idx)
 
-        narrative_stress_norm = (narrative_stress - narrative_stress.min()) / (narrative_stress.max() - narrative_stress.min() + 1e-8)
-        narrative_drift_norm = (narrative_drift - narrative_drift.min()) / (narrative_drift.max() - narrative_drift.min() + 1e-8)
+        if 'avg_cluster_drift' in narrative_features.columns:
+            narrative_drift = narrative_features.loc[common_idx, 'avg_cluster_drift']
+        else:
+            narrative_drift = pd.Series(0.0, index=common_idx)
+
+        narrative_stress_norm = self._safe_normalize(narrative_stress)
+        narrative_drift_norm = self._safe_normalize(narrative_drift)
 
         # Combine (weighted average)
         mmp = 0.5 * financial_stress_norm + 0.3 * narrative_stress_norm + 0.2 * narrative_drift_norm
@@ -93,17 +126,30 @@ class PoliticalStressIndex:
         Returns:
             EC time series
         """
+        # Get common index
+        common_idx = financial_features.index.intersection(social_features.index)
+
         # Financial: volatility / skew as elite uncertainty
-        financial_elite = financial_features.get('kurtosis', pd.Series(0))
-        financial_elite_norm = (financial_elite - financial_elite.min()) / (financial_elite.max() - financial_elite.min() + 1e-8)
+        if 'kurtosis' in financial_features.columns:
+            financial_elite = financial_features.loc[common_idx, 'kurtosis']
+        else:
+            financial_elite = pd.Series(0.0, index=common_idx)
+        financial_elite_norm = self._safe_normalize(financial_elite)
 
         # Social: high k-core indicates concentrated elite networks
         # High modularity indicates elite fragmentation
-        elite_density = social_features.get('max_k_core', pd.Series(0))
-        fragmentation = social_features.get('modularity', pd.Series(0))
+        if 'max_k_core' in social_features.columns:
+            elite_density = social_features.loc[common_idx, 'max_k_core']
+        else:
+            elite_density = pd.Series(0.0, index=common_idx)
 
-        elite_density_norm = (elite_density - elite_density.min()) / (elite_density.max() - elite_density.min() + 1e-8)
-        fragmentation_norm = (fragmentation - fragmentation.min()) / (fragmentation.max() - fragmentation.min() + 1e-8)
+        if 'modularity' in social_features.columns:
+            fragmentation = social_features.loc[common_idx, 'modularity']
+        else:
+            fragmentation = pd.Series(0.0, index=common_idx)
+
+        elite_density_norm = self._safe_normalize(elite_density)
+        fragmentation_norm = self._safe_normalize(fragmentation)
 
         # High competition = high density + high fragmentation
         ec = 0.4 * financial_elite_norm + 0.3 * elite_density_norm + 0.3 * fragmentation_norm
@@ -131,16 +177,29 @@ class PoliticalStressIndex:
         Returns:
             SFD time series
         """
-        # Financial: skew (risk premium), term structure slope
-        skew = financial_features.get('skew_proxy', pd.Series(0))
-        term_slope = financial_features.get('term_structure_slope', pd.Series(0))
+        # Get common index
+        common_idx = financial_features.index.intersection(narrative_features.index)
 
-        skew_norm = (skew - skew.min()) / (skew.max() - skew.min() + 1e-8)
-        term_norm = (term_slope - term_slope.min()) / (term_slope.max() - term_slope.min() + 1e-8)
+        # Financial: skew (risk premium), term structure slope
+        if 'skew_proxy' in financial_features.columns:
+            skew = financial_features.loc[common_idx, 'skew_proxy']
+        else:
+            skew = pd.Series(0.0, index=common_idx)
+
+        if 'term_structure_slope' in financial_features.columns:
+            term_slope = financial_features.loc[common_idx, 'term_structure_slope']
+        else:
+            term_slope = pd.Series(0.0, index=common_idx)
+
+        skew_norm = self._safe_normalize(skew)
+        term_norm = self._safe_normalize(term_slope)
 
         # Narrative: coherence loss indicates legitimacy crisis
-        coherence_loss = narrative_features.get('avg_cluster_coherence', pd.Series(1))
-        coherence_loss_norm = 1 - (coherence_loss - coherence_loss.min()) / (coherence_loss.max() - coherence_loss.min() + 1e-8)
+        if 'avg_cluster_coherence' in narrative_features.columns:
+            coherence_loss = narrative_features.loc[common_idx, 'avg_cluster_coherence']
+        else:
+            coherence_loss = pd.Series(1.0, index=common_idx)
+        coherence_loss_norm = 1 - self._safe_normalize(coherence_loss)
 
         # Combine
         sfd = 0.4 * skew_norm + 0.3 * term_norm + 0.3 * coherence_loss_norm

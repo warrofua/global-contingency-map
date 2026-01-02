@@ -47,7 +47,33 @@ class MultiViewAlignment:
         self.method = method
         self.models: Dict = {}  # {(view1, view2): model}
         self.scalers: Dict = {}  # {view_name: scaler}
+        self.feature_masks: Dict = {}  # {view_name: mask of non-constant features}
         logger.info(f"Initialized {method.upper()} alignment with {self.n_components} components")
+
+    def _remove_constant_features(
+        self,
+        X: np.ndarray,
+        view_name: str
+    ) -> Tuple[np.ndarray, int]:
+        """
+        Remove constant features (zero variance)
+
+        Args:
+            X: Feature matrix
+            view_name: Name of view
+
+        Returns:
+            (X_filtered, n_removed)
+        """
+        variances = np.var(X, axis=0)
+        non_constant_mask = variances > 1e-10
+
+        n_removed = (~non_constant_mask).sum()
+        if n_removed > 0:
+            logger.warning(f"Removing {n_removed} constant features from {view_name}")
+
+        self.feature_masks[view_name] = non_constant_mask
+        return X[:, non_constant_mask], n_removed
 
     def fit_two_view(
         self,
@@ -78,6 +104,18 @@ class MultiViewAlignment:
 
         logger.info(f"Fitting {self.method.upper()} with {len(X1_clean)} samples")
 
+        # Check for constant features and remove them
+        X1_clean, removed_features1 = self._remove_constant_features(X1_clean, view1_name)
+        X2_clean, removed_features2 = self._remove_constant_features(X2_clean, view2_name)
+
+        if X1_clean.shape[1] == 0 or X2_clean.shape[1] == 0:
+            logger.warning(f"All features are constant in {view1_name} or {view2_name}, cannot fit CCA")
+            # Create dummy model that returns zeros
+            self.models[(view1_name, view2_name)] = None
+            self.scalers[view1_name] = None
+            self.scalers[view2_name] = None
+            return self
+
         # Standardize
         scaler1 = StandardScaler()
         scaler2 = StandardScaler()
@@ -90,9 +128,9 @@ class MultiViewAlignment:
 
         # Fit model
         if self.method == "cca":
-            model = CCA(n_components=self.n_components)
+            model = CCA(n_components=min(self.n_components, X1_clean.shape[1], X2_clean.shape[1]))
         elif self.method == "pls":
-            model = PLSCanonical(n_components=self.n_components)
+            model = PLSCanonical(n_components=min(self.n_components, X1_clean.shape[1], X2_clean.shape[1]))
         else:
             raise ValueError(f"Unknown method: {self.method}")
 
@@ -104,7 +142,7 @@ class MultiViewAlignment:
         X1_c, X2_c = model.transform(X1_scaled, X2_scaled)
         correlations = [
             np.corrcoef(X1_c[:, i], X2_c[:, i])[0, 1]
-            for i in range(self.n_components)
+            for i in range(model.n_components)
         ]
 
         logger.info(f"Canonical correlations: {correlations}")
@@ -136,6 +174,13 @@ class MultiViewAlignment:
         scaler1 = self.scalers[view1_name]
         scaler2 = self.scalers[view2_name]
 
+        # Handle case where model is None (all constant features)
+        if model is None:
+            logger.warning(f"Model is None for views ({view1_name}, {view2_name}), returning NaN")
+            Z1 = np.full((len(X1), self.n_components), np.nan)
+            Z2 = np.full((len(X2), self.n_components), np.nan)
+            return Z1, Z2
+
         # Handle NaN
         mask = ~(np.isnan(X1).any(axis=1) | np.isnan(X2).any(axis=1))
 
@@ -143,13 +188,28 @@ class MultiViewAlignment:
         Z2 = np.full((len(X2), self.n_components), np.nan)
 
         if mask.sum() > 0:
-            X1_scaled = scaler1.transform(X1[mask])
-            X2_scaled = scaler2.transform(X2[mask])
+            # Filter constant features
+            X1_filtered = X1[mask]
+            X2_filtered = X2[mask]
+
+            if view1_name in self.feature_masks:
+                X1_filtered = X1_filtered[:, self.feature_masks[view1_name]]
+            if view2_name in self.feature_masks:
+                X2_filtered = X2_filtered[:, self.feature_masks[view2_name]]
+
+            X1_scaled = scaler1.transform(X1_filtered)
+            X2_scaled = scaler2.transform(X2_filtered)
 
             Z1_clean, Z2_clean = model.transform(X1_scaled, X2_scaled)
 
-            Z1[mask] = Z1_clean
-            Z2[mask] = Z2_clean
+            # Pad to n_components if needed
+            if Z1_clean.shape[1] < self.n_components:
+                Z1_clean = np.pad(Z1_clean, ((0, 0), (0, self.n_components - Z1_clean.shape[1])), constant_values=0)
+            if Z2_clean.shape[1] < self.n_components:
+                Z2_clean = np.pad(Z2_clean, ((0, 0), (0, self.n_components - Z2_clean.shape[1])), constant_values=0)
+
+            Z1[mask] = Z1_clean[:, :self.n_components]
+            Z2[mask] = Z2_clean[:, :self.n_components]
 
         return Z1, Z2
 
@@ -219,9 +279,22 @@ class MultiViewAlignment:
         Z1_from_13, Z3_from_13 = self.transform_two_view(X1, X3, view_names[0], view_names[2])
 
         # Average overlapping transformations
-        Z1 = np.nanmean([Z1_from_12, Z1_from_13], axis=0)
-        Z2 = np.nanmean([Z2_from_12, Z2_from_23], axis=0)
-        Z3 = np.nanmean([Z3_from_23, Z3_from_13], axis=0)
+        with np.errstate(all='ignore'):  # Suppress warnings for all-NaN slices
+            Z1 = np.nanmean([Z1_from_12, Z1_from_13], axis=0)
+            Z2 = np.nanmean([Z2_from_12, Z2_from_23], axis=0)
+            Z3 = np.nanmean([Z3_from_23, Z3_from_13], axis=0)
+
+        # Log warnings for views with all NaN values
+        nan_count1 = np.isnan(Z1).all(axis=1).sum()
+        nan_count2 = np.isnan(Z2).all(axis=1).sum()
+        nan_count3 = np.isnan(Z3).all(axis=1).sum()
+
+        if nan_count1 > 0:
+            logger.warning(f"{view_names[0]} has {nan_count1}/{len(Z1)} timesteps with all NaN latent values")
+        if nan_count2 > 0:
+            logger.warning(f"{view_names[1]} has {nan_count2}/{len(Z2)} timesteps with all NaN latent values")
+        if nan_count3 > 0:
+            logger.warning(f"{view_names[2]} has {nan_count3}/{len(Z3)} timesteps with all NaN latent values")
 
         return Z1, Z2, Z3
 
